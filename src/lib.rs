@@ -778,14 +778,15 @@ pub struct Origins {
 
 /// Parsed set of configured allowed origins
 #[derive(Clone, Debug)]
-pub(crate) struct ParsedAllowedOrigins {
-    pub allow_null: bool,
-    pub exact: HashSet<url::Origin>,
-    pub regex: Option<RegexSet>,
+pub struct ParsedAllowedOrigins {
+    pub(crate) allow_null: bool,
+    pub(crate) exact: HashSet<url::Origin>,
+    pub(crate) regex: Option<RegexSet>,
 }
 
 impl ParsedAllowedOrigins {
-    fn parse(origins: &Origins) -> Result<Self, Error> {
+    /// Parses the origins config into a set of pre-validated rules.
+    pub fn parse(origins: &Origins) -> Result<Self, Error> {
         let exact: Result<Vec<(&str, url::Origin)>, Error> = match &origins.exact {
             Some(exact) => exact
                 .iter()
@@ -822,7 +823,8 @@ impl ParsedAllowedOrigins {
         })
     }
 
-    fn verify(&self, origin: &Origin) -> bool {
+    /// Verifies that the origin is allowed based on the configured rules.
+    pub fn verify(&self, origin: &Origin) -> bool {
         info_!("Verifying origin: {}", origin);
         match origin {
             Origin::Null => {

@@ -257,8 +257,8 @@ See the [example](https://github.com/lawliet89/rocket_cors/blob/master/examples/
 #[cfg(test)]
 #[macro_use]
 mod test_macros;
-mod fairing;
 
+pub mod fairing;
 pub mod headers;
 
 use std::borrow::Cow;

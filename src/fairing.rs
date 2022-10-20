@@ -10,9 +10,25 @@ use crate::{
 };
 
 /// Request Local State to store CORS validation results
-enum CorsValidation {
+pub enum CorsValidation {
+    /// The request passed CORS validation
     Success,
-    Failure,
+    /// The request failed CORS validation, with the contained error
+    Failure(Error),
+}
+
+impl CorsValidation {
+    /// Runs the validation and stores the result in the request local state.
+    pub fn get<'r>(cors: &Cors, request: &'r Request<'_>) -> &'r Self {
+        request.local_cache(|| match validate(cors, request) {
+            Ok(_) => CorsValidation::Success,
+            Err(err) => CorsValidation::Failure(err),
+        })
+    }
+
+    fn must_get<'r>(request: &'r Request<'_>) -> &'r Self {
+        request.local_cache(|| unreachable!("CorsValidation must be set"))
+    }
 }
 
 /// Create a `Handler` for Fairing error handling
@@ -64,9 +80,9 @@ fn on_response_wrapper(
         Some(origin) => origin,
     };
 
-    let result = request.local_cache(|| unreachable!("This should not be executed so late"));
+    let result = CorsValidation::must_get(request);
 
-    if let CorsValidation::Failure = *result {
+    if let CorsValidation::Failure(_) = *result {
         // Nothing else for us to do
         return Ok(());
     }
@@ -117,17 +133,12 @@ impl rocket::fairing::Fairing for Cors {
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _: &mut rocket::Data<'_>) {
-        let result = match validate(self, request) {
-            Ok(_) => CorsValidation::Success,
-            Err(err) => {
-                error_!("CORS Error: {}", err);
-                let status = err.status();
-                route_to_fairing_error_handler(self, status.code, request);
-                CorsValidation::Failure
-            }
-        };
-
-        let _ = request.local_cache(|| result);
+        let result = CorsValidation::get(self, request);
+        if let CorsValidation::Failure(err) = result {
+            error_!("CORS Error: {}", err);
+            let status = err.status();
+            route_to_fairing_error_handler(self, status.code, request);
+        }
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut rocket::Response<'r>) {
